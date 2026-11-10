@@ -1,0 +1,229 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OCR 글자 읽기</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;700;900&display=swap" rel="stylesheet">
+<style>
+  :root { --navy:#14213D; --body:#4A5266; --line:#DDE3EE; --card:#F3F4F7; --bg:#FFFFFF; --orange:#B0500F; --blue:#2557B8; --ok:#1E7A46; --warn:#9A5B00; }
+  @media (prefers-color-scheme: dark) { :root { --navy:#E8ECF4; --body:#B4BCCB; --line:#2C3448; --card:#1A2133; --bg:#11161F; --orange:#F2A65A; --blue:#7FA6F0; --ok:#6CCB91; --warn:#F0C060; } }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--navy); font-family:'Noto Sans KR', system-ui, sans-serif; line-height:1.6; }
+  .wrap { max-width:1120px; margin:0 auto; padding:40px 16px 80px; }
+  .back { display:inline-block; margin-bottom:14px; color:var(--blue); text-decoration:none; font-size:14px; font-weight:700; }
+  .eyebrow { color:var(--orange); font-weight:700; font-size:14px; letter-spacing:.5px; }
+  h1 { font-size:clamp(28px,5vw,44px); font-weight:900; margin:6px 0 8px; line-height:1.2; }
+  h2 { font-size:22px; margin:40px 0 14px; }
+  p.lead { color:var(--body); margin:0 0 18px; }
+  .drop { display:block; border:2px dashed var(--line); border-radius:14px; padding:32px 16px; text-align:center; background:var(--card); cursor:pointer; transition:border-color .15s; }
+  .drop.over { border-color:var(--blue); }
+  .drop b { display:block; font-size:18px; margin-bottom:4px; }
+  .drop span { color:var(--body); font-size:14px; }
+  .controls { display:flex; flex-wrap:wrap; gap:16px; align-items:center; margin:16px 0; }
+  .label { font-size:13px; color:var(--body); font-weight:700; margin-right:6px; }
+  .seg { display:inline-flex; border:1px solid var(--line); border-radius:10px; overflow:hidden; }
+  .seg button { border:0; background:transparent; color:var(--navy); padding:9px 16px; font:inherit; font-size:14px; font-weight:700; cursor:pointer; }
+  .seg button + button { border-left:1px solid var(--line); }
+  .seg button[aria-pressed="true"] { background:var(--navy); color:var(--bg); }
+  .btn { border:1px solid var(--line); background:var(--bg); color:var(--navy); border-radius:999px; padding:8px 16px; font:inherit; font-size:14px; font-weight:700; cursor:pointer; }
+  .btn.primary { background:var(--navy); color:var(--bg); border-color:var(--navy); }
+  .btn:disabled { opacity:.45; cursor:not-allowed; }
+  .progress { height:8px; background:var(--card); border-radius:999px; overflow:hidden; margin:6px 0 4px; }
+  .progress i { display:block; height:100%; width:0; background:var(--blue); transition:width .2s; }
+  #status { font-size:14px; color:var(--body); min-height:22px; }
+  .pair { display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-top:14px; }
+  @media (max-width:700px) { .pair { grid-template-columns:1fr; } }
+  figure { align-self:start; margin:0; background:var(--card); border-radius:12px; padding:10px; }
+  canvas { width:100%; height:auto; display:block; border-radius:8px; }
+  figcaption { font-size:13px; color:var(--body); padding:8px 4px 2px; }
+  textarea { width:100%; min-height:320px; border:1px solid var(--line); border-radius:8px; padding:12px; font:inherit; font-size:15px; background:var(--bg); color:var(--navy); resize:vertical; }
+  .row { display:flex; flex-wrap:wrap; gap:8px; margin-top:8px; }
+  .note { background:var(--card); border-radius:12px; padding:14px 18px; color:var(--body); margin-top:14px; font-size:15px; }
+  .note b { color:var(--navy); }
+  .tablewrap { overflow-x:auto; max-height:360px; overflow-y:auto; }
+  table { width:100%; border-collapse:collapse; font-size:14px; }
+  th, td { text-align:left; padding:8px 10px; border-bottom:1px solid var(--line); vertical-align:top; }
+  th { color:var(--body); font-size:13px; position:sticky; top:0; background:var(--bg); }
+  td.num { font-variant-numeric:tabular-nums; white-space:nowrap; }
+  .low { color:var(--warn); font-weight:700; }
+  footer { margin-top:48px; font-size:13px; color:var(--body); }
+  footer a { color:var(--blue); }
+  .hidden { display:none; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <a class="back" href="index.html">← YOLO 결과 페이지로</a>
+  <div class="eyebrow">추가 기능 · 사진 속 글자 읽기</div>
+  <h1>OCR: 사진을 넣으면 글자를 읽어 줍니다</h1>
+  <p class="lead">사진 파일을 올리면 브라우저 안에서 <b>Tesseract.js</b>가 글자를 찾아 텍스트로 바꿉니다. 사진은 <b>서버로 보내지지 않고</b> 내 컴퓨터(브라우저)에서만 처리됩니다.</p>
+
+  <label class="drop" id="drop" for="file">
+    <b>여기를 눌러 사진 선택</b>
+    <span>또는 사진을 끌어다 놓기 · 캡처 이미지는 Ctrl+V로 붙여넣기 (jpg, png, webp 등)</span>
+  </label>
+  <input type="file" id="file" accept="image/*" class="hidden">
+
+  <div class="controls">
+    <div><span class="label">언어</span>
+      <span class="seg" id="langSeg"><button data-v="kor+eng" aria-pressed="true">한글 + 영어</button><button data-v="kor" aria-pressed="false">한글</button><button data-v="eng" aria-pressed="false">영어</button></span></div>
+    <button class="btn primary" id="runBtn" disabled>글자 읽기</button>
+  </div>
+  <div class="progress"><i id="bar"></i></div>
+  <div id="status">사진을 먼저 넣어 주세요. (처음 실행할 때 언어 데이터를 내려받느라 몇 초 더 걸립니다)</div>
+
+  <div class="pair">
+    <figure><canvas id="canvas" width="800" height="500"></canvas><figcaption id="imgCap">사진 미리보기 · 읽기가 끝나면 찾은 단어 위치에 박스를 그립니다</figcaption></figure>
+    <div>
+      <textarea id="out" placeholder="읽은 글자가 여기에 나옵니다. 직접 고칠 수도 있어요."></textarea>
+      <div class="row">
+        <button class="btn" id="copyBtn" disabled>텍스트 복사</button>
+        <button class="btn" id="saveBtn" disabled>.txt로 저장</button>
+        <button class="btn" id="jsonBtn" disabled>단어·좌표 .json 저장</button>
+      </div>
+    </div>
+  </div>
+  <div class="note" id="summary">YOLO가 <b>물체</b>에 박스를 그렸다면, OCR은 <b>글자</b>에 박스를 그리고 그 안의 내용을 읽습니다.</div>
+
+  <h2>단어별 결과</h2>
+  <div class="tablewrap"><table id="wordTable"><tr><th>#</th><th>단어</th><th>점수</th><th>박스 좌표 (x1,y1,x2,y2 px)</th></tr></table></div>
+
+  <h2>잘 읽히게 하는 요령</h2>
+  <div class="note">
+    글자가 <b>반듯하고 크게</b> 찍힌 사진일수록 잘 읽힙니다. 기울어지거나 흐리거나 손글씨인 경우, 배경이 복잡한 간판은 틀리게 읽을 수 있습니다. 점수가 <span class="low">60 미만</span>인 단어는 주황색으로 표시하니 원본과 대조해 확인하세요.
+  </div>
+
+  <footer>
+    OCR 엔진: <a href="https://github.com/naptha/tesseract.js" target="_blank" rel="noopener">Tesseract.js</a> v5 (Apache-2.0) · 언어 데이터는 처음 실행할 때 CDN에서 내려받습니다.
+  </footer>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js"></script>
+<script>
+  var lang = 'kor+eng', file = null, img = null, result = null, worker = null, workerLang = null;
+  var $ = function (id) { return document.getElementById(id); };
+  var canvas = $('canvas'), ctx = canvas.getContext('2d');
+
+  // 언어 버튼
+  document.querySelectorAll('#langSeg button').forEach(function (b, _, all) {
+    b.addEventListener('click', function () {
+      all.forEach(function (x) { x.setAttribute('aria-pressed', x === b ? 'true' : 'false'); });
+      lang = b.dataset.v;
+    });
+  });
+
+  // 파일 넣기: 선택 / 끌어다 놓기 / 붙여넣기
+  $('file').addEventListener('change', function (e) { if (e.target.files[0]) load(e.target.files[0]); });
+  var drop = $('drop');
+  ['dragenter', 'dragover'].forEach(function (t) { drop.addEventListener(t, function (e) { e.preventDefault(); drop.classList.add('over'); }); });
+  ['dragleave', 'drop'].forEach(function (t) { drop.addEventListener(t, function (e) { e.preventDefault(); drop.classList.remove('over'); }); });
+  drop.addEventListener('drop', function (e) { var f = e.dataTransfer.files[0]; if (f) load(f); });
+  window.addEventListener('paste', function (e) {
+    var items = (e.clipboardData || {}).items || [];
+    for (var i = 0; i < items.length; i++) if (items[i].type.indexOf('image') === 0) { load(items[i].getAsFile()); break; }
+  });
+
+  function load(f) {
+    if (!f.type || f.type.indexOf('image') !== 0) { setStatus('이미지 파일만 넣을 수 있습니다.'); return; }
+    file = f; result = null;
+    var url = URL.createObjectURL(f);
+    var im = new Image();
+    im.onload = function () {
+      img = im; draw();
+      $('imgCap').textContent = (f.name || '붙여넣은 이미지') + ' · ' + im.naturalWidth + '×' + im.naturalHeight;
+      $('runBtn').disabled = false;
+      $('out').value = ''; setButtons(false); bar(0);
+      $('wordTable').innerHTML = '<tr><th>#</th><th>단어</th><th>점수</th><th>박스 좌표 (x1,y1,x2,y2 px)</th></tr>';
+      setStatus('준비 완료. "글자 읽기"를 눌러 주세요.');
+    };
+    im.src = url;
+  }
+
+  function draw(words) {
+    if (!img) return;
+    canvas.width = img.naturalWidth; canvas.height = img.naturalHeight;
+    ctx.drawImage(img, 0, 0);
+    if (!words) return;
+    var lw = Math.max(2, Math.round(img.naturalWidth / 400));
+    ctx.lineWidth = lw;
+    words.forEach(function (w) {
+      var b = w.bbox;
+      ctx.strokeStyle = w.confidence < 60 ? '#F28C28' : '#2557B8';
+      ctx.strokeRect(b.x0, b.y0, b.x1 - b.x0, b.y1 - b.y0);
+    });
+  }
+
+  function bar(p) { $('bar').style.width = Math.round(p * 100) + '%'; }
+  function setStatus(s) { $('status').textContent = s; }
+  function setButtons(on) { ['copyBtn', 'saveBtn', 'jsonBtn'].forEach(function (id) { $(id).disabled = !on; }); }
+  function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
+
+  var STEP = {
+    'loading tesseract core': 'OCR 엔진 불러오는 중', 'initializing tesseract': 'OCR 엔진 준비 중',
+    'loading language traineddata': '언어 데이터 내려받는 중', 'initializing api': '언어 설정 중',
+    'recognizing text': '글자 읽는 중'
+  };
+
+  $('runBtn').addEventListener('click', async function () {
+    if (!file) return;
+    var btn = this; btn.disabled = true; setButtons(false);
+    var t0 = performance.now();
+    try {
+      if (!worker || workerLang !== lang) {
+        if (worker) await worker.terminate();
+        worker = await Tesseract.createWorker(lang, 1, {
+          logger: function (m) { setStatus((STEP[m.status] || m.status) + ' … ' + Math.round((m.progress || 0) * 100) + '%'); bar(m.progress || 0); }
+        });
+        workerLang = lang;
+      }
+      var r = await worker.recognize(file);
+      result = r.data;
+      var words = (result.words || []).filter(function (w) { return w.text.trim(); });
+      draw(words);
+      $('out').value = result.text.trim();
+      var rows = '<tr><th>#</th><th>단어</th><th>점수</th><th>박스 좌표 (x1,y1,x2,y2 px)</th></tr>';
+      words.forEach(function (w, i) {
+        var c = Math.round(w.confidence);
+        rows += '<tr><td>' + (i + 1) + '</td><td>' + esc(w.text) + '</td><td class="num' + (c < 60 ? ' low' : '') + '">' + c + '</td><td class="num">' +
+          [w.bbox.x0, w.bbox.y0, w.bbox.x1, w.bbox.y1].join(', ') + '</td></tr>';
+      });
+      $('wordTable').innerHTML = rows;
+      var low = words.filter(function (w) { return w.confidence < 60; }).length;
+      var sec = ((performance.now() - t0) / 1000).toFixed(1);
+      $('summary').innerHTML = '<b>' + words.length + '개 단어</b>를 찾았습니다 · 평균 점수 <b>' + Math.round(result.confidence) + '</b> · 점수 60 미만 <b>' + low + '개</b> · ' + sec + '초 걸림. 파란 박스 = 읽은 단어, 주황 박스 = 확인이 필요한 단어.';
+      setStatus(words.length ? '완료!' : '완료했지만 글자를 찾지 못했습니다. 더 선명하거나 글자가 큰 사진으로 해 보세요.');
+      bar(1); setButtons(!!words.length);
+    } catch (e) {
+      console.error(e);
+      setStatus('오류가 났습니다: ' + (e && e.message ? e.message : e) + ' (인터넷 연결을 확인해 주세요)');
+    } finally {
+      btn.disabled = false;
+    }
+  });
+
+  $('copyBtn').addEventListener('click', function () {
+    navigator.clipboard.writeText($('out').value).then(function () { setStatus('텍스트를 복사했습니다.'); }, function () { $('out').select(); document.execCommand('copy'); setStatus('텍스트를 복사했습니다.'); });
+  });
+  function download(name, text, type) {
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([text], { type: type }));
+    a.download = name; a.click(); setTimeout(function () { URL.revokeObjectURL(a.href); }, 1000);
+  }
+  function baseName() { return ((file && file.name) || 'pasted').replace(/\.[^.]+$/, ''); }
+  $('saveBtn').addEventListener('click', function () { download(baseName() + '_ocr.txt', $('out').value, 'text/plain;charset=utf-8'); });
+  $('jsonBtn').addEventListener('click', function () {
+    if (!result) return;
+    var data = {
+      file: (file && file.name) || null, lang: workerLang, image_size: [img.naturalWidth, img.naturalHeight],
+      engine: 'tesseract.js 5.1.1', mean_confidence: Math.round(result.confidence), text: result.text,
+      words: (result.words || []).filter(function (w) { return w.text.trim(); }).map(function (w) {
+        return { text: w.text, confidence: Math.round(w.confidence), xyxy_px: [w.bbox.x0, w.bbox.y0, w.bbox.x1, w.bbox.y1] };
+      })
+    };
+    download(baseName() + '_ocr.json', JSON.stringify(data, null, 2), 'application/json');
+  });
+</script>
+</body>
+</html>

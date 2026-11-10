@@ -5,6 +5,7 @@
 - **결과 확인 페이지:** https://gsahn26.github.io/yolo-service-assignment/
 - **실행 노트북:** [`yolo_service.ipynb`](yolo_service.ipynb) (실행 결과가 저장된 상태)
 - **실행 코드:** [`yolo_service.py`](yolo_service.py)
+- **추가 기능 · OCR 페이지:** https://gsahn26.github.io/yolo-service-assignment/ocr.html — 사진 파일을 올리면 브라우저에서 Tesseract.js로 글자(한글·영어)를 읽고, 단어 위치에 박스를 그려 줍니다. 사진은 서버로 보내지지 않습니다.
 
 ---
 
