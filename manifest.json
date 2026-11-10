@@ -1,0 +1,33 @@
+{
+  "created_at": "2026-11-10T07:01:24+00:00",
+  "inputs": [
+    {
+      "file": "input/bus.jpg"
+    }
+  ],
+  "models": {
+    "detect": "yolo26n.pt",
+    "segment": "yolo26n-seg.pt"
+  },
+  "settings": {
+    "imgsz": 640,
+    "device": "cpu",
+    "conf": [
+      0.1,
+      0.25,
+      0.5
+    ]
+  },
+  "versions": {
+    "python": "3.13.18",
+    "ultralytics": "8.4.208",
+    "torch": "2.15.0+cu132",
+    "opencv": "5.0.0"
+  },
+  "run_location": {
+    "where": "Claude(Cowork) 클라우드 샌드박스 — 리눅스 컨테이너, GPU 없음(CPU)",
+    "os": "Linux-6.18.44-fc-v338-x86_64-with-glibc2.39",
+    "machine": "x86_64"
+  },
+  "outputs": "outputs/yolo/<사진이름>/ (결과 이미지 .jpg, 좌표 .json, 마스크 폴더, summary.json)"
+}
