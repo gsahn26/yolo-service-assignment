@@ -1,0 +1,105 @@
+{
+  "image": "bus.jpg",
+  "image_size": [
+    810,
+    1080
+  ],
+  "task": "detect",
+  "model": "yolo26n.pt",
+  "imgsz": 640,
+  "device": "cpu",
+  "conf": 0.5,
+  "count": 5,
+  "detections": [
+    {
+      "class_id": 5,
+      "class_name": "bus",
+      "confidence": 0.8806,
+      "xyxy_px": [
+        0.0,
+        230.5,
+        803.2,
+        750.7
+      ],
+      "xyxy_norm": [
+        0.0,
+        0.2134,
+        0.9916,
+        0.6951
+      ],
+      "id": 0
+    },
+    {
+      "class_id": 0,
+      "class_name": "person",
+      "confidence": 0.872,
+      "xyxy_px": [
+        48.6,
+        397.7,
+        240.3,
+        902.4
+      ],
+      "xyxy_norm": [
+        0.06,
+        0.3682,
+        0.2967,
+        0.8356
+      ],
+      "id": 1
+    },
+    {
+      "class_id": 0,
+      "class_name": "person",
+      "confidence": 0.8608,
+      "xyxy_px": [
+        222.9,
+        404.8,
+        345.5,
+        861.0
+      ],
+      "xyxy_norm": [
+        0.2752,
+        0.3748,
+        0.4265,
+        0.7972
+      ],
+      "id": 2
+    },
+    {
+      "class_id": 0,
+      "class_name": "person",
+      "confidence": 0.8462,
+      "xyxy_px": [
+        669.6,
+        394.5,
+        809.9,
+        879.4
+      ],
+      "xyxy_norm": [
+        0.8267,
+        0.3653,
+        0.9998,
+        0.8143
+      ],
+      "id": 3
+    },
+    {
+      "class_id": 0,
+      "class_name": "person",
+      "confidence": 0.6562,
+      "xyxy_px": [
+        0.2,
+        553.0,
+        59.7,
+        871.3
+      ],
+      "xyxy_norm": [
+        0.0003,
+        0.512,
+        0.0737,
+        0.8067
+      ],
+      "id": 4
+    }
+  ]
+}

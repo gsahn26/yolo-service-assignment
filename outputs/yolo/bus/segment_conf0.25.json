@@ -1,0 +1,125 @@
+{
+  "image": "bus.jpg",
+  "image_size": [
+    810,
+    1080
+  ],
+  "task": "segment",
+  "model": "yolo26n-seg.pt",
+  "imgsz": 640,
+  "device": "cpu",
+  "conf": 0.25,
+  "count": 5,
+  "detections": [
+    {
+      "class_id": 0,
+      "class_name": "person",
+      "confidence": 0.877,
+      "xyxy_px": [
+        52.8,
+        396.7,
+        243.4,
+        905.9
+      ],
+      "xyxy_norm": [
+        0.0651,
+        0.3673,
+        0.3004,
+        0.8388
+      ],
+      "id": 0,
+      "mask_file": "segment_conf0.25_masks/00_person.png",
+      "mask_area_px": 49046,
+      "box_area_px": 97053,
+      "mask_to_box_ratio": 0.505
+    },
+    {
+      "class_id": 0,
+      "class_name": "person",
+      "confidence": 0.8632,
+      "xyxy_px": [
+        669.2,
+        396.2,
+        809.9,
+        880.3
+      ],
+      "xyxy_norm": [
+        0.8262,
+        0.3669,
+        0.9999,
+        0.8151
+      ],
+      "id": 1,
+      "mask_file": "segment_conf0.25_masks/01_person.png",
+      "mask_area_px": 21190,
+      "box_area_px": 68112,
+      "mask_to_box_ratio": 0.311
+    },
+    {
+      "class_id": 5,
+      "class_name": "bus",
+      "confidence": 0.8555,
+      "xyxy_px": [
+        4.8,
+        228.5,
+        806.6,
+        740.2
+      ],
+      "xyxy_norm": [
+        0.006,
+        0.2116,
+        0.9958,
+        0.6853
+      ],
+      "id": 2,
+      "mask_file": "segment_conf0.25_masks/02_bus.png",
+      "mask_area_px": 255100,
+      "box_area_px": 410281,
+      "mask_to_box_ratio": 0.622
+    },
+    {
+      "class_id": 0,
+      "class_name": "person",
+      "confidence": 0.8106,
+      "xyxy_px": [
+        221.1,
+        405.4,
+        344.5,
+        859.4
+      ],
+      "xyxy_norm": [
+        0.273,
+        0.3754,
+        0.4253,
+        0.7957
+      ],
+      "id": 3,
+      "mask_file": "segment_conf0.25_masks/03_person.png",
+      "mask_area_px": 33160,
+      "box_area_px": 56023,
+      "mask_to_box_ratio": 0.592
+    },
+    {
+      "class_id": 0,
+      "class_name": "person",
+      "confidence": 0.6484,
+      "xyxy_px": [
+        0.5,
+        550.4,
+        74.1,
+        872.2
+      ],
+      "xyxy_norm": [
+        0.0007,
+        0.5097,
+        0.0915,
+        0.8076
+      ],
+      "id": 4,
+      "mask_file": "segment_conf0.25_masks/04_person.png",
+      "mask_area_px": 10681,
+      "box_area_px": 23684,
+      "mask_to_box_ratio": 0.451
+    }
+  ]
+}

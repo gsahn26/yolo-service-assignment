@@ -1,0 +1,50 @@
+{
+  "image": "bus.jpg",
+  "runs": {
+    "detect_conf0.10": {
+      "count": 6,
+      "by_class": {
+        "bus": 1,
+        "person": 4,
+        "stop sign": 1
+      }
+    },
+    "detect_conf0.25": {
+      "count": 5,
+      "by_class": {
+        "bus": 1,
+        "person": 4
+      }
+    },
+    "detect_conf0.50": {
+      "count": 5,
+      "by_class": {
+        "bus": 1,
+        "person": 4
+      }
+    },
+    "detect_dropped_between_0.25_and_0.50": [],
+    "segment_conf0.10": {
+      "count": 5,
+      "by_class": {
+        "bus": 1,
+        "person": 4
+      }
+    },
+    "segment_conf0.25": {
+      "count": 5,
+      "by_class": {
+        "bus": 1,
+        "person": 4
+      }
+    },
+    "segment_conf0.50": {
+      "count": 5,
+      "by_class": {
+        "bus": 1,
+        "person": 4
+      }
+    },
+    "segment_dropped_between_0.25_and_0.50": []
+  }
+}
