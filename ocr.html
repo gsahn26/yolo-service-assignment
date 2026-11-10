@@ -51,6 +51,17 @@
   footer { margin-top:48px; font-size:13px; color:var(--body); }
   footer a { color:var(--blue); }
   .hidden { display:none; }
+  table.grid td { border:1px solid var(--line); min-width:60px; }
+  table.grid td:focus { outline:2px solid var(--blue); outline-offset:-2px; }
+  table.grid td.rh { color:var(--body); font-size:12px; border:0; min-width:0; }
+  #report { position:fixed; left:-10000px; top:0; width:800px; background:#fff; color:#14213D; padding:32px; font-family:'Noto Sans KR', sans-serif; line-height:1.6; }
+  #report h1 { font-size:24px; margin:0 0 4px; }
+  #report .meta { color:#4A5266; font-size:13px; margin-bottom:16px; }
+  #report h2 { font-size:17px; margin:22px 0 8px; }
+  #report img { max-width:100%; max-height:520px; border:1px solid #DDE3EE; }
+  #report table { border-collapse:collapse; width:100%; font-size:13px; }
+  #report td { border:1px solid #B4BCCB; padding:5px 7px; vertical-align:top; }
+  #report pre { white-space:pre-wrap; font-family:inherit; font-size:14px; margin:0; background:#F3F4F7; padding:12px; border-radius:6px; }
 </style>
 </head>
 <body>
@@ -69,6 +80,7 @@
   <div class="controls">
     <div><span class="label">언어</span>
       <span class="seg" id="langSeg"><button data-v="kor+eng" aria-pressed="true">한글 + 영어</button><button data-v="kor" aria-pressed="false">한글</button><button data-v="eng" aria-pressed="false">영어</button></span></div>
+    <label style="font-size:14px;font-weight:700"><input type="checkbox" id="lineOpt" checked> 표 선 지우고 읽기</label>
     <button class="btn primary" id="runBtn" disabled>글자 읽기</button>
   </div>
   <div class="progress"><i id="bar"></i></div>
@@ -79,13 +91,19 @@
     <div>
       <textarea id="out" placeholder="읽은 글자가 여기에 나옵니다. 직접 고칠 수도 있어요."></textarea>
       <div class="row">
+        <button class="btn primary" id="xlsxBtn" disabled>엑셀(.xlsx)로 저장</button>
+        <button class="btn primary" id="pdfBtn" disabled>PDF로 저장</button>
         <button class="btn" id="copyBtn" disabled>텍스트 복사</button>
-        <button class="btn" id="saveBtn" disabled>.txt로 저장</button>
-        <button class="btn" id="jsonBtn" disabled>단어·좌표 .json 저장</button>
+        <button class="btn" id="saveBtn" disabled>.txt</button>
+        <button class="btn" id="jsonBtn" disabled>.json</button>
       </div>
     </div>
   </div>
   <div class="note" id="summary">YOLO가 <b>물체</b>에 박스를 그렸다면, OCR은 <b>글자</b>에 박스를 그리고 그 안의 내용을 읽습니다.</div>
+
+  <h2>표로 정리한 결과 <span style="font-size:14px;color:var(--body);font-weight:400">· 엑셀·PDF에 이 표가 들어갑니다</span></h2>
+  <div class="note" id="gridNote" style="margin-top:0">사진 속 글자를 <b>가로 줄(행)</b>과 <b>세로 칸(열)</b> 위치로 나눠 표로 만듭니다. 표가 아닌 사진이면 한 줄이 한 행이 됩니다. 칸을 눌러 <b>직접 고칠 수 있고</b>, 고친 내용 그대로 저장됩니다.</div>
+  <div class="tablewrap" style="margin-top:10px"><table id="gridTable" class="grid"></table></div>
 
   <h2>단어별 결과</h2>
   <div class="tablewrap"><table id="wordTable"><tr><th>#</th><th>단어</th><th>점수</th><th>박스 좌표 (x1,y1,x2,y2 px)</th></tr></table></div>
@@ -96,11 +114,15 @@
   </div>
 
   <footer>
-    OCR 엔진: <a href="https://github.com/naptha/tesseract.js" target="_blank" rel="noopener">Tesseract.js</a> v5 (Apache-2.0) · 언어 데이터는 처음 실행할 때 CDN에서 내려받습니다.
+    OCR 엔진: <a href="https://github.com/naptha/tesseract.js" target="_blank" rel="noopener">Tesseract.js</a> v5 (Apache-2.0) · 엑셀: SheetJS · PDF: jsPDF + html2canvas · 언어 데이터는 처음 실행할 때 CDN에서 내려받습니다.
   </footer>
 </div>
+<div id="report" aria-hidden="true"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
 <script>
   var lang = 'kor+eng', file = null, img = null, result = null, worker = null, workerLang = null;
   var $ = function (id) { return document.getElementById(id); };
@@ -136,6 +158,7 @@
       $('runBtn').disabled = false;
       $('out').value = ''; setButtons(false); bar(0);
       $('wordTable').innerHTML = '<tr><th>#</th><th>단어</th><th>점수</th><th>박스 좌표 (x1,y1,x2,y2 px)</th></tr>';
+      $('gridTable').innerHTML = '';
       setStatus('준비 완료. "글자 읽기"를 눌러 주세요.');
     };
     im.src = url;
@@ -157,7 +180,7 @@
 
   function bar(p) { $('bar').style.width = Math.round(p * 100) + '%'; }
   function setStatus(s) { $('status').textContent = s; }
-  function setButtons(on) { ['copyBtn', 'saveBtn', 'jsonBtn'].forEach(function (id) { $(id).disabled = !on; }); }
+  function setButtons(on) { ['xlsxBtn', 'pdfBtn', 'copyBtn', 'saveBtn', 'jsonBtn'].forEach(function (id) { $(id).disabled = !on; }); }
   function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
 
   var STEP = {
@@ -178,8 +201,14 @@
         });
         workerLang = lang;
       }
-      var r = await worker.recognize(file);
+      setStatus('사진 정리 중 (표 선 지우기·확대)…');
+      var pre = preprocess(img, $('lineOpt').checked);
+      var r = await worker.recognize(pre.canvas);
       result = r.data;
+      // 확대해서 읽었으니 좌표를 원본 크기로 되돌리기
+      result.words = (result.words || []).map(function (w) {
+        return { text: w.text, confidence: w.confidence, bbox: { x0: Math.round(w.bbox.x0 / pre.s), y0: Math.round(w.bbox.y0 / pre.s), x1: Math.round(w.bbox.x1 / pre.s), y1: Math.round(w.bbox.y1 / pre.s) } };
+      });
       var words = (result.words || []).filter(function (w) { return w.text.trim(); });
       draw(words);
       $('out').value = result.text.trim();
@@ -190,6 +219,7 @@
           [w.bbox.x0, w.bbox.y0, w.bbox.x1, w.bbox.y1].join(', ') + '</td></tr>';
       });
       $('wordTable').innerHTML = rows;
+      renderGrid(buildGrid(words));
       var low = words.filter(function (w) { return w.confidence < 60; }).length;
       var sec = ((performance.now() - t0) / 1000).toFixed(1);
       $('summary').innerHTML = '<b>' + words.length + '개 단어</b>를 찾았습니다 · 평균 점수 <b>' + Math.round(result.confidence) + '</b> · 점수 60 미만 <b>' + low + '개</b> · ' + sec + '초 걸림. 파란 박스 = 읽은 단어, 주황 박스 = 확인이 필요한 단어.';
@@ -223,6 +253,168 @@
       })
     };
     download(baseName() + '_ocr.json', JSON.stringify(data, null, 2), 'application/json');
+  });
+
+  // ───── 읽기 전에 사진 정리: 흑백으로 바꾸고, 표의 긴 가로·세로 선을 지우고, 작은 사진은 확대 ─────
+  function preprocess(im, removeLines) {
+    var W0 = im.naturalWidth, s = W0 < 1400 ? Math.min(2, 1400 / W0) : 1;
+    var W = Math.round(W0 * s), H = Math.round(im.naturalHeight * s);
+    var c = document.createElement('canvas'); c.width = W; c.height = H;
+    var g = c.getContext('2d'); g.imageSmoothingQuality = 'high'; g.drawImage(im, 0, 0, W, H);
+    var d = g.getImageData(0, 0, W, H), p = d.data, n = W * H, gray = new Uint8Array(n), sum = 0, i;
+    for (i = 0; i < n; i++) { gray[i] = (p[i * 4] * 299 + p[i * 4 + 1] * 587 + p[i * 4 + 2] * 114) / 1000; sum += gray[i]; }
+    var thr = Math.min(170, sum / n * 0.8), dark = new Uint8Array(n);
+    for (i = 0; i < n; i++) dark[i] = gray[i] < thr ? 1 : 0;
+    var erase = new Uint8Array(n), Lh = Math.max(80, W * 0.25), Lv = Math.max(80, H * 0.25), x, y, st;
+    for (y = 0; y < H; y++) for (x = 0; x <= W; x++) {           // 가로로 긴 선
+      var on = x < W && dark[y * W + x];
+      if (on && st === undefined) st = x;
+      if (!on && st !== undefined) { if (x - st >= Lh) for (var k = st; k < x; k++) erase[y * W + k] = 1; st = undefined; }
+    }
+    for (x = 0; x < W; x++) { st = undefined; for (y = 0; y <= H; y++) { // 세로로 긴 선
+      var on2 = y < H && dark[y * W + x];
+      if (on2 && st === undefined) st = y;
+      if (!on2 && st !== undefined) { if (y - st >= Lv) for (var k2 = st; k2 < y; k2++) erase[k2 * W + x] = 1; st = undefined; }
+    } }
+    for (i = 0; i < n; i++) { var v = gray[i]; if (removeLines && erase[i]) v = 255; p[i * 4] = p[i * 4 + 1] = p[i * 4 + 2] = v; }
+    g.putImageData(d, 0, 0);
+    return { canvas: c, s: s };
+  }
+
+  // ───── 단어 박스 위치로 표(행·열) 만들기 ─────
+  function median(a) { var s = a.slice().sort(function (x, y) { return x - y; }); return s.length ? s[Math.floor(s.length / 2)] : 0; }
+  function buildGrid(words) {
+    if (!words.length) return [];
+    var h = median(words.map(function (w) { return w.bbox.y1 - w.bbox.y0; })) || 10;
+    // 1) 세로 위치가 비슷한 단어끼리 한 행으로
+    var ws = words.map(function (w) { return { t: w.text, x0: w.bbox.x0, x1: w.bbox.x1, yc: (w.bbox.y0 + w.bbox.y1) / 2 }; })
+      .sort(function (a, b) { return a.yc - b.yc; });
+    var rows = [];
+    ws.forEach(function (w) {
+      var r = rows[rows.length - 1];
+      if (r && Math.abs(w.yc - r.yc) < h * 0.6) { r.ws.push(w); r.yc = (r.yc * (r.ws.length - 1) + w.yc) / r.ws.length; }
+      else rows.push({ yc: w.yc, ws: [w] });
+    });
+    // 2) 한 행 안에서 간격이 넓으면 다른 칸으로
+    var gapMin = h * 1.2;
+    rows.forEach(function (r) {
+      r.ws.sort(function (a, b) { return a.x0 - b.x0; });
+      r.cells = [];
+      r.ws.forEach(function (w) {
+        var c = r.cells[r.cells.length - 1];
+        if (c && w.x0 - c.x1 < gapMin) {
+          // 한글이 한 글자씩 끊겨 읽힌 경우(디 자 인 팀)는 띄어쓰기 없이 붙이기
+          var glue = c.last && /^[가-힣]$/.test(c.last) && /^[가-힣]$/.test(w.t) && w.x0 - c.x1 < h * 0.6;
+          c.t += (glue ? '' : ' ') + w.t; c.x1 = Math.max(c.x1, w.x1); c.last = w.t;
+        }
+        else r.cells.push({ t: w.t, x0: w.x0, x1: w.x1, last: w.t });
+      });
+    });
+    // 3) 여러 행의 칸 가로 범위를 겹쳐서 열 경계 찾기 (칸이 2개 이상인 행 기준)
+    var multi = rows.filter(function (r) { return r.cells.length > 1; });
+    // 칸이 나뉜 행이 2개 이상이고 전체의 40% 이상일 때만 표로 봄
+    if (multi.length < 2 || multi.length < rows.length * 0.4) return rows.map(function (r) { return [r.cells.map(function (c) { return c.t; }).join(' ')]; });
+    var spans = [];
+    multi.forEach(function (r) { r.cells.forEach(function (c) { spans.push([c.x0, c.x1]); }); });
+    spans.sort(function (a, b) { return a[0] - b[0]; });
+    var cols = [];
+    spans.forEach(function (s) {
+      var c = cols[cols.length - 1];
+      if (c && s[0] <= c[1]) c[1] = Math.max(c[1], s[1]); else cols.push([s[0], s[1]]);
+    });
+    // 4) 각 칸을 가장 많이 겹치는 열에 넣기
+    return rows.map(function (r) {
+      var out = cols.map(function () { return ''; });
+      r.cells.forEach(function (c) {
+        var best = 0, bestOv = -Infinity;
+        cols.forEach(function (col, i) {
+          var ov = Math.min(c.x1, col[1]) - Math.max(c.x0, col[0]);
+          if (ov <= 0) ov = -Math.min(Math.abs(c.x0 - col[1]), Math.abs(col[0] - c.x1)); // 안 겹치면 가까운 열
+          if (ov > bestOv) { bestOv = ov; best = i; }
+        });
+        out[best] = out[best] ? out[best] + ' ' + c.t : c.t;
+      });
+      return out;
+    });
+  }
+  function renderGrid(grid) {
+    var html = '';
+    grid.forEach(function (row, i) {
+      html += '<tr><td class="rh">' + (i + 1) + '</td>' + row.map(function (v) { return '<td contenteditable="true">' + esc(v) + '</td>'; }).join('') + '</tr>';
+    });
+    $('gridTable').innerHTML = html;
+    var nc = grid.length ? grid[0].length : 0;
+    $('gridNote').innerHTML = grid.length
+      ? '<b>' + grid.length + '행 × ' + nc + '열</b>로 정리했습니다. ' + (nc > 1 ? '사진 속 표의 칸 위치를 기준으로 나눴어요.' : '칸 구분이 없어 한 줄을 한 행으로 넣었어요.') + ' 칸을 눌러 <b>직접 고칠 수 있고</b>, 고친 내용 그대로 엑셀·PDF에 저장됩니다.'
+      : '찾은 글자가 없습니다.';
+  }
+  function readGrid() {
+    return Array.prototype.map.call($('gridTable').rows, function (tr) {
+      return Array.prototype.slice.call(tr.cells, 1).map(function (td) { return td.innerText.replace(/\n+$/, ''); });
+    });
+  }
+  function toValue(s) {
+    var t = s.trim();
+    if (/^-?\d{1,3}(,\d{3})+(\.\d+)?$|^-?\d+(\.\d+)?$/.test(t) && !/^0\d/.test(t)) return Number(t.replace(/,/g, ''));
+    return s;
+  }
+
+  // ───── 엑셀 저장 ─────
+  $('xlsxBtn').addEventListener('click', function () {
+    if (!window.XLSX) { setStatus('엑셀 라이브러리를 불러오지 못했습니다. 인터넷 연결을 확인해 주세요.'); return; }
+    var grid = readGrid();
+    var wb = XLSX.utils.book_new();
+    var ws1 = XLSX.utils.aoa_to_sheet(grid.map(function (r) { return r.map(toValue); }));
+    var nc = grid.reduce(function (m, r) { return Math.max(m, r.length); }, 0);
+    ws1['!cols'] = Array.from({ length: nc }, function (_, c) {
+      var w = grid.reduce(function (m, r) { var v = String(r[c] || ''); return Math.max(m, v.length + (v.match(/[^\x00-\xff]/g) || []).length); }, 4);
+      return { wch: Math.min(w + 2, 60) };
+    });
+    XLSX.utils.book_append_sheet(wb, ws1, '표');
+    var lines = $('out').value.split('\n').map(function (l) { return [l]; });
+    var ws2 = XLSX.utils.aoa_to_sheet([['읽은 글자 (한 줄 = 한 행)']].concat(lines));
+    ws2['!cols'] = [{ wch: 80 }];
+    XLSX.utils.book_append_sheet(wb, ws2, '전체 텍스트');
+    var words = (result.words || []).filter(function (w) { return w.text.trim(); });
+    var ws3 = XLSX.utils.aoa_to_sheet([['#', '단어', '점수', 'x1', 'y1', 'x2', 'y2']].concat(words.map(function (w, i) {
+      return [i + 1, w.text, Math.round(w.confidence), w.bbox.x0, w.bbox.y0, w.bbox.x1, w.bbox.y1];
+    })));
+    XLSX.utils.book_append_sheet(wb, ws3, '단어 좌표');
+    XLSX.writeFile(wb, baseName() + '_ocr.xlsx');
+    setStatus('엑셀 파일을 저장했습니다. (시트: 표 · 전체 텍스트 · 단어 좌표)');
+  });
+
+  // ───── PDF 저장 (화면을 그림으로 찍어 넣기 → 한글 깨짐 없음) ─────
+  $('pdfBtn').addEventListener('click', async function () {
+    if (!window.jspdf || !window.html2canvas) { setStatus('PDF 라이브러리를 불러오지 못했습니다. 인터넷 연결을 확인해 주세요.'); return; }
+    var btn = this; btn.disabled = true; setStatus('PDF 만드는 중…');
+    try {
+      var grid = readGrid();
+      var rep = $('report');
+      rep.innerHTML = '<h1>OCR 결과</h1><div class="meta">' + esc((file && file.name) || '붙여넣은 이미지') + ' · ' + img.naturalWidth + '×' + img.naturalHeight +
+        ' · 언어 ' + esc(workerLang) + ' · 평균 점수 ' + Math.round(result.confidence) + ' · ' + new Date().toLocaleString('ko-KR') + '</div>' +
+        '<h2>원본 사진 (파란 박스 = 읽은 단어)</h2><img src="' + canvas.toDataURL('image/jpeg', 0.9) + '">' +
+        '<h2>표로 정리한 결과 (' + grid.length + '행 × ' + (grid[0] || []).length + '열)</h2><table>' +
+        grid.map(function (r) { return '<tr>' + r.map(function (v) { return '<td>' + esc(v) + '</td>'; }).join('') + '</tr>'; }).join('') + '</table>' +
+        '<h2>읽은 글자 전체</h2><pre>' + esc($('out').value) + '</pre>';
+      await new Promise(function (ok) { var im = rep.querySelector('img'); if (im.complete) ok(); else im.onload = ok; });
+      var shot = await html2canvas(rep, { scale: 2, backgroundColor: '#ffffff', logging: false });
+      var pdf = new jspdf.jsPDF({ unit: 'mm', format: 'a4' });
+      var pw = 210, ph = 297, pxPerMm = shot.width / pw, pageH = Math.floor(ph * pxPerMm);
+      for (var y = 0, page = 0; y < shot.height; y += pageH, page++) {
+        var h = Math.min(pageH, shot.height - y);
+        var part = document.createElement('canvas'); part.width = shot.width; part.height = h;
+        part.getContext('2d').drawImage(shot, 0, y, shot.width, h, 0, 0, shot.width, h);
+        if (page) pdf.addPage();
+        pdf.addImage(part.toDataURL('image/jpeg', 0.92), 'JPEG', 0, 0, pw, h / pxPerMm);
+      }
+      pdf.save(baseName() + '_ocr.pdf');
+      setStatus('PDF 파일을 저장했습니다.');
+    } catch (e) {
+      console.error(e); setStatus('PDF를 만들지 못했습니다: ' + (e && e.message ? e.message : e));
+    } finally {
+      $('report').innerHTML = ''; btn.disabled = false;
+    }
   });
 </script>
 </body>
