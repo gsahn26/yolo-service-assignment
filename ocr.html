@@ -219,7 +219,7 @@
           [w.bbox.x0, w.bbox.y0, w.bbox.x1, w.bbox.y1].join(', ') + '</td></tr>';
       });
       $('wordTable').innerHTML = rows;
-      renderGrid(buildGrid(words));
+      renderGrid(buildGrid(words, lastVLines));
       var low = words.filter(function (w) { return w.confidence < 60; }).length;
       var sec = ((performance.now() - t0) / 1000).toFixed(1);
       $('summary').innerHTML = '<b>' + words.length + '개 단어</b>를 찾았습니다 · 평균 점수 <b>' + Math.round(result.confidence) + '</b> · 점수 60 미만 <b>' + low + '개</b> · ' + sec + '초 걸림. 파란 박스 = 읽은 단어, 주황 박스 = 확인이 필요한 단어.';
@@ -255,27 +255,42 @@
     download(baseName() + '_ocr.json', JSON.stringify(data, null, 2), 'application/json');
   });
 
-  // ───── 읽기 전에 사진 정리: 흑백으로 바꾸고, 표의 긴 가로·세로 선을 지우고, 작은 사진은 확대 ─────
+  // ───── 읽기 전에 사진 정리: 흑백으로 바꾸고, 표의 긴 가로·세로 선을 찾아 지우고, 작은 사진은 확대 ─────
+  var lastVLines = [];
   function preprocess(im, removeLines) {
     var W0 = im.naturalWidth, s = W0 < 1400 ? Math.min(2, 1400 / W0) : 1;
     var W = Math.round(W0 * s), H = Math.round(im.naturalHeight * s);
     var c = document.createElement('canvas'); c.width = W; c.height = H;
     var g = c.getContext('2d'); g.imageSmoothingQuality = 'high'; g.drawImage(im, 0, 0, W, H);
-    var d = g.getImageData(0, 0, W, H), p = d.data, n = W * H, gray = new Uint8Array(n), sum = 0, i;
+    var d = g.getImageData(0, 0, W, H), p = d.data, n = W * H, gray = new Uint8Array(n), sum = 0, i, x, y, k, st;
     for (i = 0; i < n; i++) { gray[i] = (p[i * 4] * 299 + p[i * 4 + 1] * 587 + p[i * 4 + 2] * 114) / 1000; sum += gray[i]; }
     var thr = Math.min(170, sum / n * 0.8), dark = new Uint8Array(n);
     for (i = 0; i < n; i++) dark[i] = gray[i] < thr ? 1 : 0;
-    var erase = new Uint8Array(n), Lh = Math.max(80, W * 0.25), Lv = Math.max(80, H * 0.25), x, y, st;
-    for (y = 0; y < H; y++) for (x = 0; x <= W; x++) {           // 가로로 긴 선
-      var on = x < W && dark[y * W + x];
-      if (on && st === undefined) st = x;
-      if (!on && st !== undefined) { if (x - st >= Lh) for (var k = st; k < x; k++) erase[y * W + k] = 1; st = undefined; }
-    }
-    for (x = 0; x < W; x++) { st = undefined; for (y = 0; y <= H; y++) { // 세로로 긴 선
-      var on2 = y < H && dark[y * W + x];
-      if (on2 && st === undefined) st = y;
-      if (!on2 && st !== undefined) { if (y - st >= Lv) for (var k2 = st; k2 < y; k2++) erase[k2 * W + x] = 1; st = undefined; }
+    var erase = new Uint8Array(n), Lh = Math.max(80, W * 0.2), Lv = Math.max(80, H * 0.06);
+    for (y = 0; y < H; y++) { st = -1; for (x = 0; x <= W; x++) {        // 가로로 긴 선
+      if (x < W && dark[y * W + x]) { if (st < 0) st = x; }
+      else if (st >= 0) { if (x - st >= Lh) for (k = st; k < x; k++) erase[y * W + k] = 1; st = -1; }
     } }
+    for (x = 0; x < W; x++) { st = -1; for (y = 0; y <= H; y++) {         // 세로로 긴 선 지우기
+      if (y < H && dark[y * W + x]) { if (st < 0) st = y; }
+      else if (st >= 0) { if (y - st >= Lv) for (k = st; k < y; k++) erase[k * W + x] = 1; st = -1; }
+    } }
+    // 세로선 위치 찾기: 사진이 조금 기울어도 되도록 몇 픽셀 폭의 띠(한 칸씩 이동)로 묶어서, 띠 안에 긴 세로 줄이 사진 높이의 20% 이상이면 선
+    var Ld = Math.max(40, H * 0.02), bw = Math.max(3, Math.round(2 * s)), nb = W, bcov = new Float32Array(nb), bmax = new Float32Array(nb), by0 = new Float32Array(nb).fill(H), by1 = new Float32Array(nb), lines = [], b, run = null;
+    for (b = 0; b < nb; b++) { st = -1; for (y = 0; y <= H; y++) {
+      var on = false;
+      if (y < H) for (x = b; x < Math.min(W, b + bw); x++) if (dark[y * W + x]) { on = true; break; }
+      if (on) { if (st < 0) st = y; }
+      else if (st >= 0) { if (y - st >= Ld) { bcov[b] += y - st; bmax[b] = Math.max(bmax[b], y - st); by0[b] = Math.min(by0[b], st); by1[b] = Math.max(by1[b], y); } st = -1; }
+    } }
+    for (b = 0; b <= nb; b++) {
+      if (b < nb && bcov[b] >= H * 0.2) { if (!run) run = [b, b]; else run[1] = b; }
+      else if (run) {
+        var mx = 0, y0 = H, y1 = 0; for (k = run[0]; k <= run[1]; k++) { mx = Math.max(mx, bmax[k]); y0 = Math.min(y0, by0[k]); y1 = Math.max(y1, by1[k]); }
+        lines.push({ x: (run[0] + run[1] + bw) / 2 / s, maxRun: mx / s, y0: y0 / s, y1: y1 / s }); run = null;
+      }
+    }
+    lastVLines = lines;
     for (i = 0; i < n; i++) { var v = gray[i]; if (removeLines && erase[i]) v = 255; p[i * 4] = p[i * 4 + 1] = p[i * 4 + 2] = v; }
     g.putImageData(d, 0, 0);
     return { canvas: c, s: s };
@@ -283,59 +298,82 @@
 
   // ───── 단어 박스 위치로 표(행·열) 만들기 ─────
   function median(a) { var s = a.slice().sort(function (x, y) { return x - y; }); return s.length ? s[Math.floor(s.length / 2)] : 0; }
-  function buildGrid(words) {
-    if (!words.length) return [];
-    var h = median(words.map(function (w) { return w.bbox.y1 - w.bbox.y0; })) || 10;
+  function isJunk(t) {   // 점선(……, ----)이나 점선을 잘못 읽은 글자
+    return /^[.\-_·…:;|'`~,°©¢‘’"<>]+$/.test(t) || /^[ㄱ-ㅣ|]+$/.test(t) || (/^[oceaun.\-_,:;|'`]{4,}$/i.test(t) && /[oe]{2}|[.\-_]{2}/i.test(t));
+  }
+  function cleanCell(t) {
+    return t.replace(/[.\-_·…]{3,}/g, ' ').replace(/\s*\|\s*/g, ' ')
+      .replace(/(\d),\s+(\d{3})(?!\d)/g, '$1,$2')        // "82, 732" → "82,732"
+      .replace(/\s{2,}/g, ' ').trim();
+  }
+  function joinWords(ws) {
+    var t = '', last = null;
+    ws.forEach(function (w) {
+      var glue = last && /^[가-힣]$/.test(last.t) && /^[가-힣]$/.test(w.t) && w.x0 - last.x1 < w.h * 0.6;
+      t += (t && !glue ? ' ' : '') + w.t; last = w;
+    });
+    return cleanCell(t);
+  }
+  function buildGrid(words, vlines) {
+    var ws = words.map(function (w) { return { t: w.text.trim(), x0: w.bbox.x0, x1: w.bbox.x1, xc: (w.bbox.x0 + w.bbox.x1) / 2, yc: (w.bbox.y0 + w.bbox.y1) / 2, h: w.bbox.y1 - w.bbox.y0 }; })
+      .filter(function (w) { return w.t && !isJunk(w.t); });
+    if (!ws.length) return [];
+    var h = median(ws.map(function (w) { return w.h; })) || 10;
     // 1) 세로 위치가 비슷한 단어끼리 한 행으로
-    var ws = words.map(function (w) { return { t: w.text, x0: w.bbox.x0, x1: w.bbox.x1, yc: (w.bbox.y0 + w.bbox.y1) / 2 }; })
-      .sort(function (a, b) { return a.yc - b.yc; });
+    ws.sort(function (a, b) { return a.yc - b.yc; });
     var rows = [];
     ws.forEach(function (w) {
       var r = rows[rows.length - 1];
       if (r && Math.abs(w.yc - r.yc) < h * 0.6) { r.ws.push(w); r.yc = (r.yc * (r.ws.length - 1) + w.yc) / r.ws.length; }
       else rows.push({ yc: w.yc, ws: [w] });
     });
-    // 2) 한 행 안에서 간격이 넓으면 다른 칸으로
-    var gapMin = h * 1.2;
-    rows.forEach(function (r) {
-      r.ws.sort(function (a, b) { return a.x0 - b.x0; });
-      r.cells = [];
-      r.ws.forEach(function (w) {
-        var c = r.cells[r.cells.length - 1];
-        if (c && w.x0 - c.x1 < gapMin) {
-          // 한글이 한 글자씩 끊겨 읽힌 경우(디 자 인 팀)는 띄어쓰기 없이 붙이기
-          var glue = c.last && /^[가-힣]$/.test(c.last) && /^[가-힣]$/.test(w.t) && w.x0 - c.x1 < h * 0.6;
-          c.t += (glue ? '' : ' ') + w.t; c.x1 = Math.max(c.x1, w.x1); c.last = w.t;
-        }
-        else r.cells.push({ t: w.t, x0: w.x0, x1: w.x1, last: w.t });
+    rows.forEach(function (r) { r.ws.sort(function (a, b) { return a.x0 - b.x0; }); });
+    // 2) 열 경계: 사진에 세로선이 있으면 그 선, 없으면 여러 행에 공통으로 비어 있는 세로 띠
+    // 진짜 표 선만 남기기: 글자 높이의 2.5배 이상 이어진 선이어야 하고, 단어 한가운데를 지나가면 안 됨(글자 획을 선으로 잘못 본 경우)
+    var bounds = (vlines || []).filter(function (L) {
+      if (L.maxRun < h * 2.5) return false;
+      var cut = ws.filter(function (w) { return w.yc > L.y0 && w.yc < L.y1 && L.x > w.x0 + 2 && L.x < w.x1 - 2; }).length;
+      return cut < 2;
+    }).map(function (L) { return L.x; });
+    var mode = bounds.length >= 1 ? 'lines' : 'gaps';
+    if (mode === 'gaps') {
+      var multi = rows.filter(function (r) { for (var i = 1; i < r.ws.length; i++) if (r.ws[i].x0 - r.ws[i - 1].x1 > h) return true; return false; });
+      if (multi.length < 2 || multi.length < rows.length * 0.4) return rows.map(function (r) { return [joinWords(r.ws)]; });
+      var maxX = Math.ceil(Math.max.apply(null, ws.map(function (w) { return w.x1; }))) + 1, cov = new Uint16Array(maxX);
+      multi.forEach(function (r) { r.ws.forEach(function (w) { for (var x = Math.max(0, Math.floor(w.x0)); x < Math.ceil(w.x1); x++) cov[x]++; }); });
+      var allow = Math.floor(multi.length * 0.1), st = -1, seen = false;
+      for (var x = 0; x <= maxX; x++) {
+        var empty = x < maxX && cov[x] <= allow;
+        if (!empty && x < maxX) seen = true;
+        if (empty && seen) { if (st < 0) st = x; }
+        else if (st >= 0) { if (x < maxX && x - st >= h * 0.8) bounds.push((st + x) / 2); st = -1; }
+      }
+      if (!bounds.length) return rows.map(function (r) { return [joinWords(r.ws)]; });
+    }
+    bounds.sort(function (a, b) { return a - b; });
+    var nCol = bounds.length + 1;
+    var colOf = function (xc) { var c = 0; while (c < bounds.length && xc > bounds[c]) c++; return c; };
+    // 3) 단어를 가운데 위치 기준으로 열에 넣기
+    var cellsOf = rows.map(function (r) {
+      var cells = []; for (var c = 0; c < nCol; c++) cells.push([]);
+      r.ws.forEach(function (w) { cells[colOf(w.xc)].push(w); });
+      return cells;
+    });
+    // 4) 거의 비어 있는 열(이중선 사이 등)은 지우고, 그 안의 글자는 왼쪽 열로 합치기
+    var used = cellsOf.filter(function (cs) { return cs.filter(function (x) { return x.length; }).length > 1; });
+    var need = Math.max(2, Math.ceil(used.length * 0.15)), keep = [];
+    for (var c2 = 0; c2 < nCol; c2++) if (used.filter(function (cs) { return cs[c2].length; }).length >= need) keep.push(c2);
+    if (!keep.length) keep = [0];
+    var grid = cellsOf.map(function (cs) {
+      var out = keep.map(function () { return []; });
+      cs.forEach(function (ws2, c) {
+        var k = 0; while (k + 1 < keep.length && keep[k + 1] <= c) k++;
+        out[k] = out[k].concat(ws2);
       });
-    });
-    // 3) 여러 행의 칸 가로 범위를 겹쳐서 열 경계 찾기 (칸이 2개 이상인 행 기준)
-    var multi = rows.filter(function (r) { return r.cells.length > 1; });
-    // 칸이 나뉜 행이 2개 이상이고 전체의 40% 이상일 때만 표로 봄
-    if (multi.length < 2 || multi.length < rows.length * 0.4) return rows.map(function (r) { return [r.cells.map(function (c) { return c.t; }).join(' ')]; });
-    var spans = [];
-    multi.forEach(function (r) { r.cells.forEach(function (c) { spans.push([c.x0, c.x1]); }); });
-    spans.sort(function (a, b) { return a[0] - b[0]; });
-    var cols = [];
-    spans.forEach(function (s) {
-      var c = cols[cols.length - 1];
-      if (c && s[0] <= c[1]) c[1] = Math.max(c[1], s[1]); else cols.push([s[0], s[1]]);
-    });
-    // 4) 각 칸을 가장 많이 겹치는 열에 넣기
-    return rows.map(function (r) {
-      var out = cols.map(function () { return ''; });
-      r.cells.forEach(function (c) {
-        var best = 0, bestOv = -Infinity;
-        cols.forEach(function (col, i) {
-          var ov = Math.min(c.x1, col[1]) - Math.max(c.x0, col[0]);
-          if (ov <= 0) ov = -Math.min(Math.abs(c.x0 - col[1]), Math.abs(col[0] - c.x1)); // 안 겹치면 가까운 열
-          if (ov > bestOv) { bestOv = ov; best = i; }
-        });
-        out[best] = out[best] ? out[best] + ' ' + c.t : c.t;
-      });
-      return out;
-    });
+      return out.map(function (ws2) { return joinWords(ws2.sort(function (a, b) { return a.x0 - b.x0; })); });
+    }).filter(function (row) { return row.some(Boolean); });
+    if (keep.length <= 1) return mode === 'lines' ? buildGrid(words, []) : rows.map(function (r) { return [joinWords(r.ws)]; });
+    return grid;
   }
   function renderGrid(grid) {
     var html = '';
